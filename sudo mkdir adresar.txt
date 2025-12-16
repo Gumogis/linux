@@ -1,0 +1,11 @@
+sudo mkdir /adresar
+sudo groupadd skupina
+sudo useradd -m -s /bin/bash -g skupina username
+sudo passwd username
+sudo chown username:groupname /adresar
+sudo chmod 1770 /adresar - jednicka sticky bit
+cd /adresar - test opravneni
+sudo touch /adresar/Confidential.txt
+sudo chown username:groupname /adresar/Confidential.txt
+sudo chmod 640 /adresar/Confidential.txt
+su username - změna na ucet

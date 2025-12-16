@@ -1,0 +1,156 @@
+#!/bin/bash
+
+# --- Configuration ---
+NEW_GROUP_NAME=""
+NEW_USERNAME=""
+BASH_SHELL="/bin/bash"
+
+# --- Functions ---
+
+# Function to check for and create a unique group
+create_unique_group() {
+    while true; do
+        read -rp "Enter the name for the new group: " NEW_GROUP_NAME
+
+        if getent group "$NEW_GROUP_NAME" > /dev/null; then
+            echo "❌ ERROR: Group '$NEW_GROUP_NAME' already exists. Please choose a unique name."
+        else
+            echo "Attempting to create group '$NEW_GROUP_NAME'..."
+            if groupadd "$NEW_GROUP_NAME"; then
+                echo "✅ Group '$NEW_GROUP_NAME' created successfully."
+                return 0 # Success
+            else
+                echo "❌ ERROR: Failed to create group '$NEW_GROUP_NAME'. Check system permissions/logs."
+                return 1 # Failure
+            fi
+        fi
+    done
+}
+
+# Function to check for and create a unique user
+create_unique_user() {
+    # Check if a group has been successfully created first
+    if [ -z "$NEW_GROUP_NAME" ]; then
+        echo "❌ ERROR: Group name is missing. Group creation must succeed first."
+        return 1
+    fi
+
+    while true; do
+        read -rp "Enter the name for the new user: " NEW_USERNAME
+
+        if id -u "$NEW_USERNAME" > /dev/null 2>&1; then
+            echo "❌ ERROR: User '$NEW_USERNAME' already exists. Please choose a unique name."
+        else
+            echo "Attempting to create user '$NEW_USERNAME'..."
+            # Create user with:
+            # - shell set to /bin/bash (-s)
+            # - primary group set to the newly created group (-g)
+            # - no home directory created (-M - the / root directory will be their 'home' directory)
+            if useradd -s "$BASH_SHELL" -g "$NEW_GROUP_NAME" "$NEW_USERNAME"; then
+                echo "✅ User '$NEW_USERNAME' created successfully."
+                return 0 # Success
+            else
+                echo "❌ ERROR: Failed to create user '$NEW_USERNAME'. Check system permissions/logs."
+                return 1 # Failure
+            fi
+        fi
+    done
+}
+
+# Function to set password and set up the directory
+setup_user_and_directory() {
+    # Check if user and group have been successfully created first
+    if [ -z "$NEW_USERNAME" ] || [ -z "$NEW_GROUP_NAME" ]; then
+        echo "❌ ERROR: User or group name is missing. Cannot proceed."
+        return 1
+    fi
+
+    # 1. Create a password for the user
+    echo "Setting password for user '$NEW_USERNAME'..."
+    # 'passwd' prompts for the password interactively
+    if passwd "$NEW_USERNAME"; then
+        echo "✅ Password set for user '$NEW_USERNAME'."
+    else
+        echo "❌ WARNING: Failed to set password for user '$NEW_USERNAME'."
+    fi
+
+    # 2. Ensure user is a member of the new group (redundant if useradd -g was used, but good verification)
+    # The 'useradd -g' command already makes the new group the user's primary group, so this check confirms it.
+    echo "Verifying user group membership..."
+    if id -nG "$NEW_USERNAME" | grep -qw "$NEW_GROUP_NAME"; then
+        echo "✅ User '$NEW_USERNAME' is a member of group '$NEW_GROUP_NAME'."
+    else
+        echo "❌ WARNING: User '$NEW_USERNAME' is NOT a member of group '$NEW_GROUP_NAME'. Manual intervention may be needed."
+    fi
+
+    # 3. Create a directory at / with the same name as the user
+    DIR_PATH="/$NEW_USERNAME"
+    echo "Creating directory '$DIR_PATH'..."
+    if mkdir -p "$DIR_PATH"; then
+        echo "✅ Directory '$DIR_PATH' created."
+
+        # 4. Set ownership
+        echo "Setting ownership of '$DIR_PATH' to $NEW_USERNAME:$NEW_GROUP_NAME..."
+        if chown "$NEW_USERNAME:$NEW_GROUP_NAME" "$DIR_PATH"; then
+            echo "✅ Ownership set successfully."
+        else
+            echo "❌ ERROR: Failed to set ownership."
+        fi
+
+        # 5. Set permissions (full control for owner/group)
+        # Permissions: rwx (owner) | rwx (group) | --- (others) -> 770
+        echo "Setting permissions of '$DIR_PATH' to 770..."
+        if chmod 770 "$DIR_PATH"; then
+            echo "✅ Permissions set to 770 (rwxrwx---)."
+        else
+            echo "❌ ERROR: Failed to set permissions to 770."
+        fi
+
+        # 6. Set Sticky Bit (ensures only the owner can delete their files in the directory)
+        # The sticky bit (t) on a directory ensures that files can only be deleted or renamed by the owner of the file,
+        # or the directory owner, or root. Since we want only the owner of a file to delete it, the sticky bit is
+        # the correct control mechanism, often used in /tmp.
+        echo "Setting the Sticky Bit on '$DIR_PATH'..."
+        if chmod +t "$DIR_PATH"; then
+            echo "✅ Sticky Bit set successfully. Only the file owner can delete their files in this directory."
+        else
+            echo "❌ ERROR: Failed to set the Sticky Bit."
+        fi
+
+    else
+        echo "❌ FATAL ERROR: Failed to create directory '$DIR_PATH'. Cannot complete setup."
+        return 1
+    fi
+
+    return 0
+}
+
+# --- Main Script Execution ---
+
+# Ensure the script is run with root privileges
+if [ "$(id -u)" -ne 0 ]; then
+    echo "🛑 This script must be run as root (or with sudo)."
+    exit 1
+fi
+
+echo "--- User Management Script Starting ---"
+
+# Step 1: Create a new group (with uniqueness check)
+if ! create_unique_group; then
+    echo "Script aborted due to group creation failure."
+    exit 2
+fi
+
+# Step 2: Create a new user (with uniqueness check)
+if ! create_unique_user; then
+    echo "Script aborted due to user creation failure."
+    exit 3
+fi
+
+# Step 3, 4, 5, 6, 7: Set up user and directory
+if ! setup_user_and_directory; then
+    echo "Script completed with errors during setup phase."
+    exit 4
+fi
+
+echo "--- Script Completed Successfully ---"
