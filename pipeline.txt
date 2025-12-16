@@ -1,0 +1,1 @@
+grep -v "^#" /etc/services | awk '{print $1}' | grep -v "^$" | sort -u | tr -d '\n\r ' | tr -s '\n' | awk 'length > 0' > uniqueservices.txt
