@@ -1,0 +1,88 @@
+sudo mkdir /DEVEL
+sudo mkdir /MARKETING
+sudo mkdir /FINANCE
+sudo groupadd DEVEL
+sudo groupadd MARKETING
+sudo groupadd FINANCE
+# Oddělení DEVEL
+sudo useradd -m -s /bin/bash -g DEVEL novake    # Administrátor
+sudo useradd -m -s /bin/bash -g DEVEL adams     # Běžný uživatel
+sudo useradd -m -s /bin/bash -g DEVEL petrak    # Běžný uživatel
+
+# Oddělení MARKETING
+sudo useradd -m -s /bin/bash -g MARKETING veselyj # Administrátor
+sudo useradd -m -s /bin/bash -g MARKETING davidm  # Běžný uživatel
+sudo useradd -m -s /bin/bash -g MARKETING lucieh  # Běžný uživatel
+
+# Oddělení FINANCE
+sudo useradd -m -s /bin/bash -g FINANCE tomask  # Administrátor
+sudo useradd -m -s /bin/bash -g FINANCE martinad # Běžný uživatel
+sudo useradd -m -s /bin/bash -g FINANCE pavelb  # Běžný uživatel
+
+# Nastavení hesel (pro produkční použití nutné!)
+# sudo passwd novake
+# ... a tak dále pro všechny uživatele
+
+# /DEVEL: Vlastník novake, Skupina DEVEL
+sudo chown novake:DEVEL /DEVEL
+# /MARKETING: Vlastník veselyj, Skupina MARKETING
+sudo chown veselyj:MARKETING /MARKETING
+# /FINANCE: Vlastník tomask, Skupina FINANCE
+sudo chown tomask:FINANCE /FINANCE
+
+sudo chmod 1770 /DEVEL
+sudo chmod 1770 /MARKETING
+sudo chmod 1770 /FINANCE
+
+# Vytvoření souborů a vložení textu
+echo "Tento dokument obsahuje důvěrné informace pro oddělení." | sudo tee /DEVEL/interni_info.txt > /dev/null
+echo "Tento dokument obsahuje důvěrné informace pro oddělení." | sudo tee /MARKETING/interni_info.txt > /dev/null
+echo "Tento dokument obsahuje důvěrné informace pro oddělení." | sudo tee /FINANCE/interni_info.txt > /dev/null
+
+sudo chown novake:DEVEL /DEVEL/interni_info.txt
+sudo chown veselyj:MARKETING /MARKETING/interni_info.txt
+sudo chown tomask:FINANCE /FINANCE/interni_info.txt
+
+sudo chmod 640 /DEVEL/interni_info.txt
+sudo chmod 640 /MARKETING/interni_info.txt
+sudo chmod 640 /FINANCE/interni_info.txt
+
+sudo mkdir /zalohy
+
+sudo groupadd archive_admins
+# Přidání administrátorů do doplňkové skupiny
+sudo usermod -aG archive_admins novake
+sudo usermod -aG archive_admins veselyj
+sudo usermod -aG archive_admins tomask
+
+sudo chown root:archive_admins /zalohy
+sudo chmod 1770 /zalohy
+
+# Přepnutí do kontextu administrátora (novake)
+sudo -i -u novake << EOF
+# Získání aktuálního data ve formátu YYYYMMDD
+DATE=$(date +%Y%m%d)
+
+# Vytvoření nekomprimovaného tar archivu
+tar -cvf /zalohy/devel_data_${DATE}.tar /DEVEL
+
+# Kontrola obsahu archivu (volitelné)
+# tar -tvf /zalohy/devel_data_${DATE}.tar
+EOF
+
+echo "--- Ověření adresářů a oprávnění ---"
+ls -ld /DEVEL /MARKETING /FINANCE /zalohy
+
+echo -e "\n--- Ověření souborů interni_info.txt ---"
+ls -l /DEVEL/interni_info.txt
+ls -l /MARKETING/interni_info.txt
+ls -l /FINANCE/interni_info.txt
+
+echo -e "\n--- Ověření členství ve skupinách ---"
+# Ověření administrátorů oddělení (novake, veselyj, tomask)
+id novake
+id veselyj
+id tomask
+
+# Ověření běžného uživatele (např. adams)
+id adams
