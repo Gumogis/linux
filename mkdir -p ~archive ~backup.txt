@@ -1,0 +1,6 @@
+mkdir -p ~/archive ~/backup
+tar -cvf ~/archive/log.tar -C /var/log \
+    --transform='s|.*/||g' \
+    alternatives.log auth.log bootstrap.log cron.log dpkg.log kern.log mail.log
+tar -tvf ~/archive/log.tar
+tar -xvf ~/archive/log.tar -C ~/backup
