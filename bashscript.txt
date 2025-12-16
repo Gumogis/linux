@@ -154,3 +154,6 @@ if ! setup_user_and_directory; then
 fi
 
 echo "--- Script Completed Successfully ---"
+
+
+chmod +x user_management.sh  - aby šel spustit
